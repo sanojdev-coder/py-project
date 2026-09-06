@@ -1,0 +1,162 @@
+- Follow this plan
+
+Decide project goal
+Write problem statement and user stories
+Define acceptance criteria
+Set up Python environment
+Create repo structure
+Add dependencies
+Write first test
+Implement feature
+Run tests and lint
+Refine specs and continue
+
+
+- For spec-first workflow - add the following under the project
+
+Problem statement
+Users or actors
+Functional requirements
+Acceptance criteria
+Edge cases
+Out-of-scope items
+Definition of done
+
+- folder
+project-root/
+  README.md
+  pyproject.toml
+  .gitignore
+  .pre-commit-config.yaml
+  requirements.txt
+  app/
+    __init__.py
+    main.py
+    config.py
+    domain/
+    services/
+    api/
+    models/
+  tests/
+    unit/
+    integration/
+  docs/
+    specs/
+    architecture.md
+
+- test-first flow
+For each spec:
+
+Write a failing test
+Implement the smallest code to pass it
+Refactor if needed
+Repeat
+
+
+- for project, define the milestones
+where a milestone plan is as below:
+Milestone 1: Project skeleton + environment setup
+Milestone 2: Requirements/spec documents
+Milestone 3: First failing test
+Milestone 4: Minimal feature implementation
+Milestone 5: CI checks and basic validation
+Milestone 6: Iterate based on feedback
+
+- Spec Driven Development overview
+Constitution / project rules
+Defines the team’s standards and guardrails.
+Example: coding style, testing expectations, architecture constraints, 
+how PRs are reviewed.
+This is the “non-negotiable rules” layer.
+
+Spec creation
+Turns vague requests into clear requirements.
+Helps reduce ambiguity before implementation starts.
+Good for product features, bug fixes, and API changes.
+
+Planning
+Breaks a large feature into concrete tasks.
+Makes work traceable and easier to estimate.
+Helps avoid jumping straight into coding.
+
+Execution / implementation workflow
+Executes against the plan in controlled steps.
+Encourages small validated changes instead of big risky rewrites.
+Often pairs well with test-first development.
+
+Traceability
+Links requirements → plan → code → tests.
+Very useful when you want to know why something was built and whether it is fully covered.
+
+Quality gates
+Confirms a feature is complete before merging.
+Example checks: tests pass, requirements mapped, no missing edge cases.
+
+Change control
+Keeps requirements from drifting as implementation moves forward.
+Helpful in multi-step or longer-lived projects.
+
+Team alignment
+Makes it easier for multiple people to work from the same source of truth.
+Reduces “I thought this meant something else” problems.
+
+
+- spec-driven workflow:
+
+Constitution : Rules for how the project should behave and evolve.
+Spec-first feature definition : Requirements, acceptance criteria, edge cases.
+Task decomposition : A feature is turned into milestones and discrete work items.
+Test-first validation :  Write a failing test, then implement against it.
+Execution loop : Implement small steps and re-validate.
+Review / signoff : Final checks that the feature meets the spec.
+Requirement traceability : Each task can be linked back to a requirement.
+
+- Finally, the below is alternate plan to get the “Spec Kit” effect here 
+
+- Use a lightweight pipeline like this:
+
+1. Constitution
+
+Project rules and standards
+Example: Python style, testing expectations, architecture boundaries
+
+2. Feature spec
+
+Problem statement
+Users/actors
+Functional requirements
+Acceptance criteria
+Edge cases
+Definition of done
+
+3. Plan
+
+Split work into milestones/tasks
+Example: setup, spec, fail test, implement, validate
+
+4. Execute
+
+Write failing test
+Implement minimum code
+Run validation
+Refactor only if needed
+
+5. Quality gate
+
+Ensure the feature matches the spec before closing it
+
+-- commands
+Establish project principles:
+/speckit-constitution Create principles for this Python project covering code quality, testing, API design, and simplicity
+
+Create your first feature spec:
+/speckit-specify Build a book management API where users can create, list, update, and delete books
+
+Turn the spec into a technical plan:
+/speckit-plan Use the existing Python app structure in app/, keep dependencies minimal, and add tests for each endpoint
+
+Break the plan into tasks:
+/speckit-tasks
+
+Execute the tasks:
+/speckit-implement

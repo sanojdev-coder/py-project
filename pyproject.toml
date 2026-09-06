@@ -1,0 +1,24 @@
+[project]
+name = "py-project"
+version = "0.1.0"
+description = "A Python project scaffold for development and testing."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "poc/tests"]
+norecursedirs = [".venv", ".git", "spec-kit", "poc/.venv"]
+python_files = ["test_*.py"]
+log_cli = true
+log_cli_level = "INFO"
+log_format = "%(levelname)s %(name)s %(message)s"
+
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
