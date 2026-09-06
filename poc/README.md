@@ -110,6 +110,43 @@ set AZURE_OPENAI_API_VERSION=2024-02-01
 python -m pytest -q tests\test_workflow.py
 ```
 
+### Azure OpenAI setup checks
+
+Use these commands from `D:\TMobile\py-project\poc` to verify the SDK, environment variables, and client mode before running live calls.
+
+#### 1. Verify OpenAI SDK and AzureOpenAI support
+
+```bash
+.\.venv\Scripts\python.exe -c "import sys, openai; print('python=', sys.executable); print('openai=', openai.__file__); print('has_AzureOpenAI=', hasattr(openai, 'AzureOpenAI'))"
+```
+
+Expected result:
+- `has_AzureOpenAI= True`
+
+#### 2. Set Azure OpenAI environment variables in the current shell
+
+```bash
+set AZURE_OPENAI_ENDPOINT=<your-endpoint>
+set AZURE_OPENAI_API_KEY=<your-key>
+set AZURE_OPENAI_DEPLOYMENT=<your-deployment>
+set AZURE_OPENAI_API_VERSION=2024-02-01
+```
+
+#### 3. Verify the environment variables are visible to the interpreter
+
+```bash
+.\.venv\Scripts\python.exe -c "import os; print('endpoint_set=', bool(os.getenv('AZURE_OPENAI_ENDPOINT'))); print('api_key_set=', bool(os.getenv('AZURE_OPENAI_API_KEY'))); print('deployment=', os.getenv('AZURE_OPENAI_DEPLOYMENT')); print('api_version=', os.getenv('AZURE_OPENAI_API_VERSION'))"
+```
+
+#### 4. Verify AzureOpenAIClient switches to live mode
+
+```bash
+.\.venv\Scripts\python.exe -c "from app.mcp.azure_openai_client import AzureOpenAIClient; client = AzureOpenAIClient(); print('live_mode=', client._azure_client is not None)"
+```
+
+Expected result:
+- `live_mode= True`
+
 ## Troubleshooting
 
 ### 1. Stays in stub mode unexpectedly
