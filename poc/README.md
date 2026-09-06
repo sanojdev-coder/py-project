@@ -48,7 +48,13 @@ Required environment variables for live mode:
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_API_KEY`
 - `AZURE_OPENAI_DEPLOYMENT`
-- `AZURE_OPENAI_API_VERSION` (optional override, default is `2024-02-01`)
+
+`AZURE_OPENAI_ENDPOINT` must be an Azure AI Foundry resource endpoint
+(`https://<resource>.services.ai.azure.com/`). The client calls its
+OpenAI-compatible v1 API at `/openai/v1`, not the classic Azure OpenAI
+deployments path — a plain `AzureOpenAI` SDK client pointed at this endpoint
+returns `404 Resource not found` because that path doesn't exist on this
+resource type, and no `api-version` query param is needed for `/openai/v1`.
 
 ## Run tests
 

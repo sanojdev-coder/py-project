@@ -12,30 +12,31 @@ logger = logging.getLogger(__name__)
 
 class AzureOpenAIClient:
     def __init__(self):
-        self.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip()
+        self.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip().rstrip("/")
         self.api_key = os.getenv("AZURE_OPENAI_API_KEY", "").strip()
         self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-        self.api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
         self._azure_client: Any = None
 
         try:
             openai_module = importlib.import_module("openai")
-            azure_openai_cls = getattr(openai_module, "AzureOpenAI")
+            openai_cls = getattr(openai_module, "OpenAI")
         except Exception:
-            azure_openai_cls = None
+            openai_cls = None
 
         has_required_config = bool(self.endpoint and self.api_key and self.deployment)
-        if has_required_config and azure_openai_cls is not None:
-            self._azure_client = azure_openai_cls(
-                azure_endpoint=self.endpoint,
+        if has_required_config and openai_cls is not None:
+            # This resource is an Azure AI Foundry endpoint (*.services.ai.azure.com),
+            # which exposes an OpenAI-compatible v1 API at /openai/v1 — not the classic
+            # Azure OpenAI deployments path the AzureOpenAI SDK class targets, and it
+            # needs no api-version query param.
+            self._azure_client = openai_cls(
+                base_url=f"{self.endpoint}/openai/v1",
                 api_key=self.api_key,
-                api_version=self.api_version,
             )
             logger.info(
-                "AzureOpenAIClient initialized mode=live endpoint=%s deployment=%s api_version=%s",
+                "AzureOpenAIClient initialized mode=live endpoint=%s deployment=%s",
                 self.endpoint,
                 self.deployment,
-                self.api_version,
             )
         else:
             logger.info(
@@ -43,7 +44,7 @@ class AzureOpenAIClient:
                 bool(self.endpoint),
                 bool(self.api_key),
                 self.deployment,
-                azure_openai_cls is not None,
+                openai_cls is not None,
             )
 
     def analyze_coverage_report(self, report: CoverageAssessmentInput) -> RCAAnalysisToolResult:
@@ -64,8 +65,11 @@ class AzureOpenAIClient:
                         "role": "system",
                         "content": (
                             "You are a telecom RCA assistant. Return only valid JSON with keys: "
-                            "root_cause_summary, confidence, hypotheses, recommended_actions. "
-                            "confidence must be between 0.0 and 1.0."
+                            "root_cause_summary (string), confidence (float 0.0-1.0), "
+                            "hypotheses (array of objects, each with type (string), description (string), "
+                            "confidence (float 0.0-1.0)), and recommended_actions (array of strings). "
+                            "Do not return hypotheses as plain strings; each must be an object with "
+                            "type, description, and confidence fields."
                         ),
                     },
                     {
