@@ -8,9 +8,11 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when LangGraph is ab
 
 from app.models.coverage import CoverageAssessmentReport
 from app.models.rca import RCAAnalysisResult
+from app.mcp.tool_schema import ServiceNowIssueResult
 from app.services.nora_client import NORAClient
 from app.services.rca_service import RCAService
 from app.services.response_composer import ResponseComposer
+from app.services.ticket_service import TicketService
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ class WorkflowState(TypedDict, total=False):
     report: CoverageAssessmentReport
     nora_response: CoverageAssessmentReport
     rca_result: RCAAnalysisResult
+    ticket_result: ServiceNowIssueResult
     composed_response: dict
 
 
@@ -32,6 +35,7 @@ class _FallbackWorkflowGraph:
         next_state = dict(state)
         next_state.update(self.workflow._fetch_coverage(next_state))
         next_state.update(self.workflow._analyze_rca(next_state))
+        next_state.update(self.workflow._create_ticket(next_state))
         next_state.update(self.workflow._compose_response(next_state))
         logger.info("Fallback workflow invoke response=%s", next_state)
         return next_state
@@ -41,6 +45,7 @@ class CoverageDiagnosticsWorkflow:
     def __init__(self):
         self.nora_client = NORAClient()
         self.rca_service = RCAService()
+        self.ticket_service = TicketService()
         self.response_composer = ResponseComposer()
         self.graph = self._build_graph()
 
@@ -52,10 +57,12 @@ class CoverageDiagnosticsWorkflow:
         graph = StateGraph(WorkflowState)
         graph.add_node("fetch_coverage", self._fetch_coverage)
         graph.add_node("analyze_rca", self._analyze_rca)
+        graph.add_node("create_ticket", self._create_ticket)
         graph.add_node("compose_response", self._compose_response)
         graph.add_edge(START, "fetch_coverage")
         graph.add_edge("fetch_coverage", "analyze_rca")
-        graph.add_edge("analyze_rca", "compose_response")
+        graph.add_edge("analyze_rca", "create_ticket")
+        graph.add_edge("create_ticket", "compose_response")
         graph.add_edge("compose_response", END)
         logger.info("Workflow graph mode=langgraph")
         return graph.compile()
@@ -80,10 +87,34 @@ class CoverageDiagnosticsWorkflow:
         logger.info("Workflow node analyze_rca response=%s", response)
         return response
 
+    def _create_ticket(self, state: WorkflowState) -> WorkflowState:
+        logger.info("Workflow node create_ticket request=%s", state)
+        report = state["nora_response"]
+        rca_result = state["rca_result"]
+
+        if not self.ticket_service.should_create_ticket(report, rca_result):
+            response = {
+                "ticket_result": ServiceNowIssueResult(
+                    mode="decision",
+                    action="create_issue",
+                    success=False,
+                    message="Ticket creation skipped by decision policy",
+                )
+            }
+            logger.info("Workflow node create_ticket response=%s", response)
+            return response
+
+        response = {"ticket_result": self.ticket_service.create_ticket(report, rca_result)}
+        logger.info("Workflow node create_ticket response=%s", response)
+        return response
+
     def _compose_response(self, state: WorkflowState) -> WorkflowState:
         logger.info("Workflow node compose_response request=%s", state)
         response = {
-            "composed_response": self.response_composer.compose(state["rca_result"])
+            "composed_response": self.response_composer.compose(
+                state["rca_result"],
+                state.get("ticket_result"),
+            )
         }
         logger.info("Workflow node compose_response response=%s", response)
         return response

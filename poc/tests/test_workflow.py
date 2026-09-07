@@ -83,6 +83,7 @@ def test_workflow_runs_with_langgraph_mode_on(monkeypatch, caplog):
             next_state = dict(state)
             next_state.update(self.nodes["fetch_coverage"](next_state))
             next_state.update(self.nodes["analyze_rca"](next_state))
+            next_state.update(self.nodes["create_ticket"](next_state))
             next_state.update(self.nodes["compose_response"](next_state))
             return next_state
 
@@ -122,6 +123,7 @@ def test_workflow_runs_with_langgraph_mode_on(monkeypatch, caplog):
     assert isinstance(result, RCAAnalysisResult)
     assert result.report_id == "CAR-101"
     assert "Workflow graph mode=langgraph" in caplog.text
+    assert "Workflow node create_ticket response=" in caplog.text
 
 
 @pytest.mark.skipif(

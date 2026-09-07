@@ -9,16 +9,18 @@ This folder contains a minimal Python proof-of-concept for the coverage diagnost
 3. Run the report through a LangGraph `StateGraph` when LangGraph is installed, or a local fallback graph when it is not.
 4. Fetch a local NORA coverage assessment stub.
 5. Analyze the report through `RCAService` and `AzureOpenAIClient` in dual mode (live Azure call when configured, deterministic stub fallback otherwise).
-6. Compose the response payload.
-7. Return the `RCAAnalysisResult` to the caller.
+6. Decide whether a ServiceNow ticket should be created.
+7. Call the ServiceNow MCP tool layer to create an incident when policy requires it.
+8. Compose the response payload, including ticket details when available.
+9. Return the `RCAAnalysisResult` to the caller.
 
 The workflow exposes a `graph` attribute and a `run_langgraph` entrypoint. In this POC, the graph uses LangGraph when it is available and falls back to the local wrapper when it is not.
 
 ## Architecture
 
 - `app/models` - shared contract models such as `CoverageAssessmentReport` and `RCAAnalysisResult`
-- `app/services` - NORA client, RCA service, and response composer
-- `app/mcp` - MCP tool schema and Azure OpenAI adapter
+- `app/services` - NORA client, RCA service, ticket service, and response composer
+- `app/mcp` - MCP tool schema, Azure OpenAI adapter, and ServiceNow MCP server
 - `app/orchestrator` - static workflow orchestration
 - `tests` - first failing tests for workflow behavior
 
@@ -26,7 +28,9 @@ The workflow exposes a `graph` attribute and a `run_langgraph` entrypoint. In th
 
 - MCP tool schema: [poc/app/mcp/tool_schema.py](poc/app/mcp/tool_schema.py)
 - Azure OpenAI adapter: [poc/app/mcp/azure_openai_client.py](poc/app/mcp/azure_openai_client.py)
+- ServiceNow MCP server: [poc/app/mcp/servicenow_mcp_server.py](poc/app/mcp/servicenow_mcp_server.py)
 - RCA integration update: [poc/app/services/rca_service.py](poc/app/services/rca_service.py)
+- Ticket creation service: [poc/app/services/ticket_service.py](poc/app/services/ticket_service.py)
 - OpenAPI contract: [poc/openapi.yaml](poc/openapi.yaml)
 
 ## Key integration points
@@ -36,6 +40,8 @@ The NORA coverage assessment endpoint is treated as an upstream dependency. In t
 
 ### MCP tool layer
 The RCA service does not call Azure OpenAI directly in the POC. It uses an MCP-style tool layer exposed via `CoverageAssessmentInput` and `RCAAnalysisToolResult` contracts.
+
+The ticketing path follows the same pattern. Workflow code does not call ServiceNow REST APIs directly. It goes through an MCP-style server adapter that exposes `create_issue`, `get_issue`, and `update_issue` operations and normalizes the result schema.
 
 ### Azure OpenAI
 The model integration is represented by `AzureOpenAIClient`, which now supports dual mode:
@@ -56,17 +62,38 @@ deployments path — a plain `AzureOpenAI` SDK client pointed at this endpoint
 returns `404 Resource not found` because that path doesn't exist on this
 resource type, and no `api-version` query param is needed for `/openai/v1`.
 
+### ServiceNow MCP server
+The ServiceNow integration is represented by `ServiceNowMCPServer`, which exposes these tool-style methods:
+
+- `create_issue`
+- `get_issue`
+- `update_issue`
+
+Required environment variables for live ServiceNow mode:
+
+- `SERVICENOW_INSTANCE_URL`
+- `SERVICENOW_USERNAME`
+- `SERVICENOW_PASSWORD`
+
+Optional environment variables:
+
+- `SERVICENOW_VERIFY_SSL`
+- `SERVICENOW_CA_BUNDLE`
+- `SERVICENOW_TIMEOUT_SECONDS`
+
+If the ServiceNow credentials are missing, `create_issue` returns a stub ticket result so the workflow can continue locally. `get_issue` and `update_issue` return a structured non-success result when configuration is missing.
+
 ## Run tests
 
 ```bash
 cd D:\TMobile\py-project
 set PYTHONPATH=D:\TMobile\py-project\poc
 .\.venv\Scripts\python.exe -m pip install -r .\poc\requirements.txt
-.\.venv\Scripts\python.exe -m pytest -q --rootdir="D:\TMobile\py-project\poc" --confcutdir="D:\TMobile\py-project\poc" .\tests
+.\.venv\Scripts\python.exe -m pytest -q --rootdir="D:\TMobile\py-project\poc" --confcutdir="D:\TMobile\py-project\poc" .\poc\tests
 ```
 
 Expected baseline result in current environment:
-- `4 passed, 1 skipped`
+- `9 passed`
 
 ## Verified run modes (from poc folder)
 
@@ -77,11 +104,11 @@ Use these exact commands from `D:\TMobile\py-project\poc`.
 Run this command from `D:\TMobile\py-project`:
 
 ```bash
-.\.venv\Scripts\python.exe -m pytest -q --rootdir="D:\TMobile\py-project\poc" --confcutdir="D:\TMobile\py-project\poc" .\tests
+.\.venv\Scripts\python.exe -m pytest -q --rootdir="D:\TMobile\py-project\poc" --confcutdir="D:\TMobile\py-project\poc" .\poc\tests
 ```
 
 Expected result in current environment:
-- `4 passed, 1 skipped`
+- `9 passed`
 
 ### Mode 1: Run full workflow tests
 
@@ -90,7 +117,14 @@ set PYTHONPATH=D:/TMobile/py-project/poc
 ../.venv/Scripts/python.exe -m pytest -q --rootdir=D:/TMobile/py-project/poc --confcutdir=D:/TMobile/py-project/poc ./tests/test_workflow.py -rs
 ```
 
-### Mode 2: Run real LangGraph ON-mode test only
+### Mode 2: Run ServiceNow MCP server tests only
+
+```bash
+set PYTHONPATH=D:/TMobile/py-project/poc
+../.venv/Scripts/python.exe -m pytest -q --rootdir=D:/TMobile/py-project/poc --confcutdir=D:/TMobile/py-project/poc ./tests/test_servicenow_mcp_server.py -rs
+```
+
+### Mode 3: Run real LangGraph ON-mode test only
 
 ```bash
 set PYTHONPATH=D:/TMobile/py-project/poc
@@ -112,9 +146,22 @@ set PYTHONPATH=D:\TMobile\py-project\poc
 set AZURE_OPENAI_ENDPOINT=<your-endpoint>
 set AZURE_OPENAI_API_KEY=<your-key>
 set AZURE_OPENAI_DEPLOYMENT=<your-deployment>
-set AZURE_OPENAI_API_VERSION=2024-02-01
 python -m pytest -q tests\test_workflow.py
 ```
+
+## Run with live ServiceNow ticket creation
+
+```bash
+cd D:\TMobile\py-project\poc
+set PYTHONPATH=D:\TMobile\py-project\poc
+set SERVICENOW_INSTANCE_URL=https://<instance>.service-now.com
+set SERVICENOW_USERNAME=<username>
+set SERVICENOW_PASSWORD=<password>
+set SERVICENOW_CA_BUNDLE=C:\path\to\corporate-root-ca.pem
+python -m pytest -q --rootdir=D:/TMobile/py-project/poc --confcutdir=D:/TMobile/py-project/poc tests\test_workflow.py
+```
+
+The workflow creates a ServiceNow incident when the NORA report indicates outage, degraded coverage, or partial service.
 
 ### Azure OpenAI setup checks
 
@@ -177,7 +224,40 @@ Common causes:
 - API version is not supported by the deployed model.
 - Corporate network or proxy blocks outbound calls.
 
-### 3. LangGraph import or runtime issues
+### 3. ServiceNow ticketing stays in stub mode
+Symptoms:
+- Ticket result shows `mode=stub`.
+
+Checks:
+- Confirm `SERVICENOW_INSTANCE_URL` is set and non-empty.
+- Confirm `SERVICENOW_USERNAME` is set and non-empty.
+- Confirm `SERVICENOW_PASSWORD` is set and non-empty.
+- Confirm the instance URL ends at the host root and does not include `/api/now/...`.
+
+### 4. ServiceNow live create/get/update fails
+Symptoms:
+- Ticket result shows `success=False` in live mode.
+
+Common causes:
+- Credentials are invalid.
+- The ServiceNow user lacks incident API permissions.
+- Corporate SSL interception requires `SERVICENOW_CA_BUNDLE` to point at the local root CA bundle, or `SERVICENOW_VERIFY_SSL=false` for local testing only.
+- The instance is hibernated or unreachable.
+
+### 5. ServiceNow certificate verification fails
+Symptoms:
+- `httpx.ConnectError: [SSL: CERTIFICATE_VERIFY_FAILED]`
+
+Preferred fix:
+- Export the corporate or proxy root certificate to a PEM file.
+- Set `SERVICENOW_CA_BUNDLE` to that PEM file path.
+- Restart the process so the workflow rebuilds the ServiceNow client with the new settings.
+
+Temporary local workaround:
+- Set `SERVICENOW_VERIFY_SSL=false`.
+- Use this only for local testing.
+
+### 6. LangGraph import or runtime issues
 Symptoms:
 - Workflow does not build a LangGraph-backed graph.
 
@@ -186,7 +266,7 @@ Checks:
 - Run tests from the poc folder and set PYTHONPATH to the poc path.
 - Ensure the same interpreter is used for both install and test commands.
 
-### 4. Import path problems in tests
+### 7. Import path problems in tests
 Symptoms:
 - ModuleNotFoundError for app.orchestrator or related app packages.
 
@@ -194,7 +274,7 @@ Fix:
 - Run from D:\TMobile\py-project\poc.
 - Set PYTHONPATH to D:\TMobile\py-project\poc before running pytest.
 
-### 5. Non-JSON model output in live mode
+### 8. Non-JSON model output in live mode
 Symptoms:
 - JSON parsing fails in the AzureOpenAIClient response handling.
 
@@ -203,21 +283,31 @@ Fix options:
 - Add a response_format setting when using a model/API version that supports it.
 - Add defensive parsing and schema validation with actionable log messages.
 
-## Next steps in POC is to add the MCP Adapter
+## Current status
 
-The next step is to tune prompt/response validation for production quality and expand tests to cover live-mode parsing and fallback behavior.
+The POC now includes:
+
+- NORA fetch stub
+- Azure OpenAI-backed RCA analysis with fallback mode
+- ServiceNow MCP server for incident create/get/update
+- Workflow ticket creation decision and response shaping
+
+Cosmos DB persistence for ticket mapping and request state is intentionally deferred to a later slice.
 
 ### Recommended order
 1. Install the Python dependencies in requirements.txt
 2. Run the first tests in test_workflow.py
 3. Confirm workflow tests pass in stub mode
-4. Add environment variables for live mode:
+4. Add environment variables for live Azure mode:
    - AZURE_OPENAI_ENDPOINT
    - AZURE_OPENAI_API_KEY
    - AZURE_OPENAI_DEPLOYMENT
-   - AZURE_OPENAI_API_VERSION
-5. Validate one end-to-end happy path locally in live mode
-6. Add tests that intentionally force fallback mode (missing config or live-call error)
+5. Add environment variables for live ServiceNow mode:
+   - SERVICENOW_INSTANCE_URL
+   - SERVICENOW_USERNAME
+   - SERVICENOW_PASSWORD
+6. Validate one end-to-end happy path locally in live mode
+7. Add Cosmos DB persistence for ticket mapping and request state
 
 ### Minimal command sequence
 ```bash
@@ -225,15 +315,14 @@ cd D:\TMobile\py-project\poc
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python -m pytest -q
+set PYTHONPATH=D:\TMobile\py-project\poc
+python -m pytest -q --rootdir=D:/TMobile/py-project/poc --confcutdir=D:/TMobile/py-project/poc tests
 ```
 
-### Then add the real LLM adapter
-The actual integration point is:
-- azure_openai_client.py
-
-That is where live-mode request/response handling and stub fallback behavior are implemented.
-
-> The most important next change is expanding live-mode validation and hardening response parsing for production scenarios.
+### Main integration points
+The current implementation centers on:
+- `azure_openai_client.py` for live/stub RCA analysis
+- `servicenow_mcp_server.py` for incident create/get/update
+- `ticket_service.py` for decision policy and request shaping
 
 If you want, I can do the next exact step and move the POC from stubbed logic to a real Azure OpenAI integration skeleton with environment config and test coverage.
