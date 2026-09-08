@@ -79,6 +79,7 @@ Optional environment variables:
 
 - `SERVICENOW_VERIFY_SSL`
 - `SERVICENOW_CA_BUNDLE`
+- `SERVICENOW_CALLER_USERNAME`
 - `SERVICENOW_TIMEOUT_SECONDS`
 
 If the ServiceNow credentials are missing, `create_issue` returns a stub ticket result so the workflow can continue locally. `get_issue` and `update_issue` return a structured non-success result when configuration is missing.
@@ -157,6 +158,7 @@ set PYTHONPATH=D:\TMobile\py-project\poc
 set SERVICENOW_INSTANCE_URL=https://<instance>.service-now.com
 set SERVICENOW_USERNAME=<username>
 set SERVICENOW_PASSWORD=<password>
+set SERVICENOW_CALLER_USERNAME=admin
 set SERVICENOW_CA_BUNDLE=C:\path\to\corporate-root-ca.pem
 python -m pytest -q --rootdir=D:/TMobile/py-project/poc --confcutdir=D:/TMobile/py-project/poc tests\test_workflow.py
 ```
@@ -232,6 +234,7 @@ Checks:
 - Confirm `SERVICENOW_INSTANCE_URL` is set and non-empty.
 - Confirm `SERVICENOW_USERNAME` is set and non-empty.
 - Confirm `SERVICENOW_PASSWORD` is set and non-empty.
+- Confirm `SERVICENOW_CALLER_USERNAME` matches a real `sys_user.user_name` when you want a populated caller.
 - Confirm the instance URL ends at the host root and does not include `/api/now/...`.
 
 ### 4. ServiceNow live create/get/update fails
@@ -326,3 +329,9 @@ The current implementation centers on:
 - `ticket_service.py` for decision policy and request shaping
 
 If you want, I can do the next exact step and move the POC from stubbed logic to a real Azure OpenAI integration skeleton with environment config and test coverage.
+
+
+-- Service now settings
+ $env:SERVICENOW_INSTANCE_URL="https://dev428031.service-now.com"
+ $env:SERVICENOW_CALLER_USERNAME="admin"                                            $env:SERVICENOW_USERNAME="admin"                                                   $env:SERVICENOW_PASSWORD="LiUyf*FB-y78"
+ $env:SERVICENOW_VERIFY_SSL="false"

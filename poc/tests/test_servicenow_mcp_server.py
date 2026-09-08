@@ -35,10 +35,20 @@ def test_create_issue_uses_live_path_when_configured(monkeypatch):
 
     server = ServiceNowMCPServer()
 
+    requests = []
+
     def fake_request(method, path, params=None, json_body=None):
+        requests.append((method, path, params, json_body))
+        if method == "GET":
+            assert path == "/api/now/table/sys_user"
+            assert params is not None
+            assert params["sysparm_query"] == "user_name=admin"
+            return [{"sys_id": "user123", "user_name": "admin", "name": "System Administrator"}]
+
         assert method == "POST"
         assert path == "/api/now/table/incident"
         assert json_body is not None
+        assert json_body["caller_id"] == "user123"
         return {
             "sys_id": "abc123",
             "number": "INC0010002",
@@ -62,6 +72,45 @@ def test_create_issue_uses_live_path_when_configured(monkeypatch):
     assert result.success is True
     assert result.number == "INC0010002"
     assert result.sys_id == "abc123"
+    assert len(requests) == 2
+
+
+def test_create_issue_skips_caller_when_lookup_returns_no_user(monkeypatch):
+    monkeypatch.setenv("SERVICENOW_INSTANCE_URL", "https://example.service-now.com")
+    monkeypatch.setenv("SERVICENOW_USERNAME", "admin")
+    monkeypatch.setenv("SERVICENOW_PASSWORD", "secret")
+
+    server = ServiceNowMCPServer()
+
+    def fake_request(method, path, params=None, json_body=None):
+        if method == "GET":
+            return []
+
+        assert method == "POST"
+        assert path == "/api/now/table/incident"
+        assert json_body is not None
+        assert "caller_id" not in json_body
+        return {
+            "sys_id": "abc123",
+            "number": "INC0010003",
+            "state": "1",
+            "short_description": json_body["short_description"],
+        }
+
+    monkeypatch.setattr(server, "_request", fake_request)
+
+    result = server.create_issue(
+        ServiceNowCreateIssueInput(
+            report_id="CAR-203",
+            subscriber_id="sub-203",
+            serving_market="ATL-01",
+            short_description="NORA Coverage Alert CAR-203 for sub-203",
+            description="diagnostic payload",
+        )
+    )
+
+    assert result.success is True
+    assert result.number == "INC0010003"
 
 
 def test_get_issue_by_number(monkeypatch):
